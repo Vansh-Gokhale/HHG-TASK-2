@@ -1,1 +1,2 @@
 [2026-08-17 01:59:25] test: verify fixed-size chunk overlap boundary conditions
+[2026-08-17 02:05:28] feat: implement E5 ONNX model load in embedder.py
