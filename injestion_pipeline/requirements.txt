@@ -1,0 +1,7 @@
+datasets
+lancedb
+pyarrow
+sentence-transformers[onnx]
+numpy
+tqdm
+pytest
