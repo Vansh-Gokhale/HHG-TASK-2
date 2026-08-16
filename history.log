@@ -1,3 +1,4 @@
 [2026-08-17 01:59:25] test: verify fixed-size chunk overlap boundary conditions
 [2026-08-17 02:05:28] feat: implement E5 ONNX model load in embedder.py
 [2026-08-17 02:10:10] feat: prefix passages with 'passage: ' before embedding
+[2026-08-17 02:18:49] feat: support vector normalization in embedder
