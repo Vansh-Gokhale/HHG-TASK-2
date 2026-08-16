@@ -6,3 +6,4 @@
 [2026-08-17 03:43:16] feat: implement vector validation guardrail
 [2026-08-17 03:47:05] feat: reject NaN and zero-norm embeddings
 [2026-08-17 04:08:04] refactor: isolate guardrail checks into guardrails.py
+[2026-08-17 04:19:05] feat: implement semantic similarity chunker
