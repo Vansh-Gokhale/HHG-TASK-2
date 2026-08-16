@@ -3,3 +3,4 @@
 [2026-08-17 02:10:10] feat: prefix passages with 'passage: ' before embedding
 [2026-08-17 02:18:49] feat: support vector normalization in embedder
 [2026-08-17 02:45:53] test: add tests for embedder model outputs
+[2026-08-17 03:43:16] feat: implement vector validation guardrail
