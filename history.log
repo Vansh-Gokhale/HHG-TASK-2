@@ -33,3 +33,4 @@
 [2026-08-18 01:38:08] refactor: convert config arguments to typed namespace
 [2026-08-18 02:25:20] fix: ignore comment lines in denylist.txt
 [2026-08-18 02:31:42] test: add tests for content safety regex matching
+[2026-08-18 03:53:10] perf: adjust PyArrow batch size for optimal LanceDB writes
