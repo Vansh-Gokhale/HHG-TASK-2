@@ -12,3 +12,4 @@
 [2026-08-17 05:54:21] refactor: optimize cosine similarity calculation with NumPy
 [2026-08-17 06:15:13] feat: add metadata-aware chunker strategy
 [2026-08-17 06:16:46] feat: inject source, language, and index into metadata chunk schema
+[2026-08-17 07:04:23] refactor: decouple chunker strategies in chunkers.py
