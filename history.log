@@ -25,3 +25,4 @@
 [2026-08-17 16:15:27] feat: implement CLI entry point in main.py
 [2026-08-17 19:41:28] feat: support custom limit on rows per language for testing
 [2026-08-17 20:18:16] feat: support specific language filtering in CLI
+[2026-08-17 21:35:29] test: add integration test for full ingestion run
