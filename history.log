@@ -9,3 +9,4 @@
 [2026-08-17 04:19:05] feat: implement semantic similarity chunker
 [2026-08-17 05:21:55] feat: add cosine similarity threshold for clustering sentences
 [2026-08-17 05:46:30] feat: integrate Indic-aware sentence splitter for semantic chunking
+[2026-08-17 05:54:21] refactor: optimize cosine similarity calculation with NumPy
