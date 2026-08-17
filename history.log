@@ -30,3 +30,4 @@
 [2026-08-18 00:17:26] feat: generate manifest.json containing model parameters
 [2026-08-18 00:38:06] fix: resolve resource warnings during ONNX session close
 [2026-08-18 00:50:19] perf: run chunkers in parallel to speed up processing
+[2026-08-18 01:38:08] refactor: convert config arguments to typed namespace
