@@ -21,3 +21,4 @@
 [2026-08-17 13:59:26] test: verify database insertion and retrieval
 [2026-08-17 14:55:17] feat: implement pipeline orchestration in pipeline.py
 [2026-08-17 15:08:56] feat: integrate HuggingFace dataset loading for MSMARCO-XI
+[2026-08-17 15:46:11] feat: group incoming dataset rows by language
