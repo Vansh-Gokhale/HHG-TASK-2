@@ -35,3 +35,4 @@
 [2026-08-18 02:31:42] test: add tests for content safety regex matching
 [2026-08-18 03:53:10] perf: adjust PyArrow batch size for optimal LanceDB writes
 [2026-08-18 04:02:40] docs: update README with database schema description
+[2026-08-18 04:10:35] fix: handle case-insensitive matching in content safety filter
