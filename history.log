@@ -27,3 +27,4 @@
 [2026-08-17 20:18:16] feat: support specific language filtering in CLI
 [2026-08-17 21:35:29] test: add integration test for full ingestion run
 [2026-08-17 23:14:47] feat: generate ingestion_report.json with run statistics
+[2026-08-18 00:17:26] feat: generate manifest.json containing model parameters
