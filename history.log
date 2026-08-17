@@ -16,3 +16,4 @@
 [2026-08-17 08:12:10] test: verify semantic chunker output shapes and boundaries
 [2026-08-17 09:23:01] feat: implement LanceDB connection and table creation in store.py
 [2026-08-17 11:14:41] feat: add batch write logic to LanceDB
+[2026-08-17 11:17:11] feat: add support for conditional ANN index creation
