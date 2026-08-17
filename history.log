@@ -13,3 +13,4 @@
 [2026-08-17 06:15:13] feat: add metadata-aware chunker strategy
 [2026-08-17 06:16:46] feat: inject source, language, and index into metadata chunk schema
 [2026-08-17 07:04:23] refactor: decouple chunker strategies in chunkers.py
+[2026-08-17 08:12:10] test: verify semantic chunker output shapes and boundaries
