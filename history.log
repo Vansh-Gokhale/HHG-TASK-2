@@ -23,3 +23,4 @@
 [2026-08-17 15:08:56] feat: integrate HuggingFace dataset loading for MSMARCO-XI
 [2026-08-17 15:46:11] feat: group incoming dataset rows by language
 [2026-08-17 16:15:27] feat: implement CLI entry point in main.py
+[2026-08-17 19:41:28] feat: support custom limit on rows per language for testing
