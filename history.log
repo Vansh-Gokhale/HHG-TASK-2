@@ -36,3 +36,4 @@
 [2026-08-18 03:53:10] perf: adjust PyArrow batch size for optimal LanceDB writes
 [2026-08-18 04:02:40] docs: update README with database schema description
 [2026-08-18 04:10:35] fix: handle case-insensitive matching in content safety filter
+[2026-08-18 05:08:22] feat: add retry logic for HuggingFace dataset download
