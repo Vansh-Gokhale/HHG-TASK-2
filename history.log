@@ -19,3 +19,4 @@
 [2026-08-17 11:17:11] feat: add support for conditional ANN index creation
 [2026-08-17 12:10:41] feat: implement output directory cleanup flag
 [2026-08-17 13:59:26] test: verify database insertion and retrieval
+[2026-08-17 14:55:17] feat: implement pipeline orchestration in pipeline.py
