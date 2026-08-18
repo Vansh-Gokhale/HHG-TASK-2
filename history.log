@@ -45,3 +45,4 @@
 [2026-08-18 08:36:55] feat: filter out near-duplicate chunks based on embedding similarity
 [2026-08-18 09:14:50] perf: optimize near-duplicate detection using vector index
 [2026-08-18 09:38:29] test: add unit tests for near-duplicate filtering
+[2026-08-18 12:28:31] fix: resolve off-by-one error in overlap token count
