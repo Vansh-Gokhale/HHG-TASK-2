@@ -67,3 +67,4 @@
 [2026-08-18 21:42:55] refactor: decouple configuration parsing from pipeline run
 [2026-08-18 22:30:45] test: test CLI argument validation behavior
 [2026-08-18 23:02:03] fix: resolve memory leak in ONNX inference loops
+[2026-08-19 00:37:38] docs: detail database indexing logic in docs
