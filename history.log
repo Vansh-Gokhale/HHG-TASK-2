@@ -60,3 +60,4 @@
 [2026-08-18 15:59:35] docs: add troubleshooting section to README
 [2026-08-18 16:59:16] feat: support custom ONNX model paths via environment variables
 [2026-08-18 18:39:50] refactor: wrap LanceDB table actions in helper class
+[2026-08-18 19:04:24] test: check behavior of invalid embeddings in validation stage
