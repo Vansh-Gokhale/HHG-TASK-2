@@ -57,3 +57,4 @@
 [2026-08-18 15:33:37] fix: update default output directory in CLI args
 [2026-08-18 15:36:20] refactor: move schema definitions to dedicated module
 [2026-08-18 15:57:31] fix: correct ANN index build condition logic
+[2026-08-18 15:59:35] docs: add troubleshooting section to README
