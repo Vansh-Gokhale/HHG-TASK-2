@@ -64,3 +64,4 @@
 [2026-08-18 20:08:21] fix: prevent NaN vector write to DB
 [2026-08-18 20:19:22] perf: optimize NumPy matrix calculations
 [2026-08-18 21:18:57] feat: write log file with detailed trace of rejections
+[2026-08-18 21:42:55] refactor: decouple configuration parsing from pipeline run
