@@ -40,3 +40,4 @@
 [2026-08-18 05:34:52] perf: tune ONNX Runtime execution provider settings
 [2026-08-18 05:44:58] refactor: extract dataset download into load module
 [2026-08-18 06:00:27] fix: reject passages that exceed maximum length before chunking
+[2026-08-18 07:01:17] test: verify metadata preservation through pipeline stages
