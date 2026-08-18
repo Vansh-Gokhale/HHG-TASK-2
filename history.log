@@ -63,3 +63,4 @@
 [2026-08-18 19:04:24] test: check behavior of invalid embeddings in validation stage
 [2026-08-18 20:08:21] fix: prevent NaN vector write to DB
 [2026-08-18 20:19:22] perf: optimize NumPy matrix calculations
+[2026-08-18 21:18:57] feat: write log file with detailed trace of rejections
