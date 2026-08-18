@@ -53,3 +53,4 @@
 [2026-08-18 14:28:10] feat: allow configurable minimum chunk length
 [2026-08-18 14:28:51] feat: write run summary to console after successful ingestion
 [2026-08-18 14:38:54] test: mock HuggingFace dataset download in pytest
+[2026-08-18 15:05:25] perf: use fast tokenizers for token counting
