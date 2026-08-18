@@ -42,3 +42,4 @@
 [2026-08-18 06:00:27] fix: reject passages that exceed maximum length before chunking
 [2026-08-18 07:01:17] test: verify metadata preservation through pipeline stages
 [2026-08-18 08:22:17] feat: add chunk quality gate to drop extremely short chunks
+[2026-08-18 08:36:55] feat: filter out near-duplicate chunks based on embedding similarity
