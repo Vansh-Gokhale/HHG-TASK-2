@@ -47,3 +47,4 @@
 [2026-08-18 09:38:29] test: add unit tests for near-duplicate filtering
 [2026-08-18 12:28:31] fix: resolve off-by-one error in overlap token count
 [2026-08-18 12:40:25] refactor: clean up logging outputs in main entry point
+[2026-08-18 12:45:12] docs: document manifest.json verification convention
