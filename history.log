@@ -49,3 +49,4 @@
 [2026-08-18 12:40:25] refactor: clean up logging outputs in main entry point
 [2026-08-18 12:45:12] docs: document manifest.json verification convention
 [2026-08-18 13:21:48] fix: handle empty datasets gracefully without crashing
+[2026-08-18 13:29:09] refactor: simplify token tracking in sentence chunker
