@@ -72,3 +72,4 @@
 [2026-08-19 01:10:19] refactor: use relative imports inside ingestion package
 [2026-08-19 02:27:17] fix: handle zero-length sentences gracefully in semantic chunker
 [2026-08-19 04:18:52] test: verify behaviour with empty denylist.txt
+[2026-08-19 04:18:55] perf: speed up SHA-256 calculation on raw strings
