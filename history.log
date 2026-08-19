@@ -93,3 +93,4 @@
 [2026-08-19 11:53:34] feat: output validation counts in terminal summary
 [2026-08-19 11:53:44] test: mock LanceDB connection in store tests
 [2026-08-19 12:26:18] fix: check for directory existence before writing report
+[2026-08-19 12:44:02] refactor: remove dead code in chunkers module
