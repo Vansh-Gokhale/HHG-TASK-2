@@ -78,3 +78,4 @@
 [2026-08-19 05:39:27] fix: format metadata correctly before database insertion
 [2026-08-19 05:50:39] test: add mock tests for embedding function
 [2026-08-19 05:53:14] perf: optimize batch allocation in dataset loader
+[2026-08-19 06:41:24] fix: catch and log specific PyArrow deserialization errors
