@@ -100,3 +100,4 @@
 [2026-08-19 14:43:22] refactor: format code files with black and isort standard
 [2026-08-19 15:05:51] fix: ensure version hint is written to lancedb on save
 [2026-08-19 16:33:01] test: add full integration smoke test using mock data
+[2026-08-19 17:13:08] chore: prepare repository for initial public release
