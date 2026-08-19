@@ -82,3 +82,4 @@
 [2026-08-19 07:05:54] refactor: split main pipeline run into smaller sub-methods
 [2026-08-19 07:34:03] docs: correct typo in E5 model prefix instructions
 [2026-08-19 07:35:07] feat: log detailed statistics on dropped chunks per stage
+[2026-08-19 08:45:53] test: add unit tests for fixed-size token chunker
