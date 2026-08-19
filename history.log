@@ -77,3 +77,4 @@
 [2026-08-19 05:04:50] feat: add CLI option to disable ANN index generation
 [2026-08-19 05:39:27] fix: format metadata correctly before database insertion
 [2026-08-19 05:50:39] test: add mock tests for embedding function
+[2026-08-19 05:53:14] perf: optimize batch allocation in dataset loader
