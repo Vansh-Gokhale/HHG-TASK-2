@@ -75,3 +75,4 @@
 [2026-08-19 04:18:55] perf: speed up SHA-256 calculation on raw strings
 [2026-08-19 04:25:04] refactor: rename database schema columns for clarity
 [2026-08-19 05:04:50] feat: add CLI option to disable ANN index generation
+[2026-08-19 05:39:27] fix: format metadata correctly before database insertion
