@@ -96,3 +96,4 @@
 [2026-08-19 12:44:02] refactor: remove dead code in chunkers module
 [2026-08-19 12:53:43] docs: format README CLI flags table
 [2026-08-19 13:50:22] fix: sanitize denylist terms to strip leading/trailing spaces
+[2026-08-19 13:55:52] test: test unicode handling in content safety filter
