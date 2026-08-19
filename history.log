@@ -80,3 +80,4 @@
 [2026-08-19 05:53:14] perf: optimize batch allocation in dataset loader
 [2026-08-19 06:41:24] fix: catch and log specific PyArrow deserialization errors
 [2026-08-19 07:05:54] refactor: split main pipeline run into smaller sub-methods
+[2026-08-19 07:34:03] docs: correct typo in E5 model prefix instructions
