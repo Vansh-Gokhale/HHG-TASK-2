@@ -99,3 +99,4 @@
 [2026-08-19 13:55:52] test: test unicode handling in content safety filter
 [2026-08-19 14:43:22] refactor: format code files with black and isort standard
 [2026-08-19 15:05:51] fix: ensure version hint is written to lancedb on save
+[2026-08-19 16:33:01] test: add full integration smoke test using mock data
