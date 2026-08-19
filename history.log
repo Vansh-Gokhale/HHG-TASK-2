@@ -86,3 +86,4 @@
 [2026-08-19 09:08:08] fix: avoid dropping last chunk in document if under overlap size
 [2026-08-19 09:33:02] refactor: use pathlib for all path manipulations
 [2026-08-19 09:51:57] perf: disable unnecessary ONNX Runtime graph optimizations
+[2026-08-19 09:53:31] fix: ensure output directory is absolute
