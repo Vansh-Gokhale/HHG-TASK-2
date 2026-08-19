@@ -88,3 +88,4 @@
 [2026-08-19 09:51:57] perf: disable unnecessary ONNX Runtime graph optimizations
 [2026-08-19 09:53:31] fix: ensure output directory is absolute
 [2026-08-19 10:16:56] test: verify fresh startup resets output folder cleanly
+[2026-08-19 10:53:46] refactor: adjust log levels for dataset load warnings
