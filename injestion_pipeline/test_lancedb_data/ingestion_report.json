@@ -1,0 +1,51 @@
+{
+  "embedding_model": "intfloat/multilingual-e5-small",
+  "embedding_backend": "onnx",
+  "embedding_dim": 384,
+  "passage_prefix": "passage: ",
+  "query_prefix_note": "runtime MUST prefix queries with 'query: ' to match this index",
+  "languages_processed": [
+    "hi",
+    "ta"
+  ],
+  "stage_counts": {
+    "total_rows_loaded": 20,
+    "total_passages_extracted": 60,
+    "after_structural_validation": 20,
+    "after_safety_filter": 20,
+    "total_chunks_produced": 60,
+    "after_chunk_quality_gate": 20,
+    "after_vector_validation": 20,
+    "final_rows_written": 20
+  },
+  "chunk_counts_by_strategy": {
+    "fixed": 20,
+    "semantic": 20,
+    "metadata_aware": 20
+  },
+  "rejected_counts_by_guardrail": {
+    "structural_invalid": 0,
+    "structural_duplicate": 40,
+    "safety_filter": 0,
+    "chunk_too_short_or_long": 0,
+    "chunk_near_duplicate": 40,
+    "vector_invalid": 0
+  },
+  "index_built": {
+    "hi": false,
+    "ta": false
+  },
+  "wall_clock_seconds_by_stage": {
+    "load": 0.0,
+    "model_load": 15.52,
+    "extract_passages": 0.0,
+    "structural_validation": 0.001,
+    "safety_filter": 0.0,
+    "chunking": 0.01,
+    "embedding": 0.206,
+    "chunk_quality_gate": 0.007,
+    "vector_validation": 0.0,
+    "write_lancedb": 0.038,
+    "index_build": 0.0
+  }
+}

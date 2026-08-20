@@ -1,0 +1,7 @@
+[
+  "tests/test_smoke.py::test_ingestion_report_exists",
+  "tests/test_smoke.py::test_manifest_exists",
+  "tests/test_smoke.py::test_output_dir_exists",
+  "tests/test_smoke.py::test_table_has_rows",
+  "tests/test_smoke.py::test_vectors_are_valid"
+]

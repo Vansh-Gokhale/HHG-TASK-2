@@ -1,0 +1,8 @@
+{
+  "embedding_model": "intfloat/multilingual-e5-small",
+  "embedding_backend": "onnx",
+  "embedding_dim": 384,
+  "passage_prefix": "passage: ",
+  "query_prefix": "query: ",
+  "query_prefix_note": "runtime MUST prefix queries with 'query: ' to match this index"
+}
