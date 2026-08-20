@@ -25,8 +25,8 @@ class LanceDBStore:
         self.output_dir = output_dir
         self.fresh = fresh
         self.db = None
-        self.table = None
-        self.total_rows_written = 0
+        self.tables = {}
+        self.total_rows_written = {}
 
     def connect(self):
         """Connect to LanceDB, optionally clearing the output directory first."""
@@ -38,28 +38,30 @@ class LanceDBStore:
         self.db = lancedb.connect(self.output_dir)
         logger.info("Connected to LanceDB at %s", self.output_dir)
 
-    def create_table(self):
+    def create_table(self, table_name: str):
         """Create (or overwrite) the passages table with explicit PyArrow schema."""
-        self.table = self.db.create_table(
-            TABLE_NAME,
+        self.tables[table_name] = self.db.create_table(
+            table_name,
             schema=TABLE_SCHEMA,
             mode="overwrite",
         )
-        self.total_rows_written = 0
-        logger.info("Created table '%s' with explicit schema (mode=overwrite).", TABLE_NAME)
+        self.total_rows_written[table_name] = 0
+        logger.info("Created table '%s' with explicit schema (mode=overwrite).", table_name)
 
-    def add_batch(self, chunks: List[Dict[str, Any]], embeddings: np.ndarray):
+    def add_batch(self, chunks: List[Dict[str, Any]], embeddings: np.ndarray, table_name: str):
         """Write a batch of chunks + embeddings to the table.
 
         Args:
             chunks: List of chunk dicts with keys matching TABLE_SCHEMA field names.
             embeddings: Embedding matrix (N x 384) corresponding to chunks.
+            table_name: The table to write to.
         """
         if not chunks:
             return
 
-        if self.table is None:
-            raise RuntimeError("Table not created. Call create_table() first.")
+        table = self.tables.get(table_name)
+        if table is None:
+            raise RuntimeError(f"Table {table_name} not created. Call create_table() first.")
 
         # Build PyArrow arrays
         records = []
@@ -73,38 +75,38 @@ class LanceDBStore:
                 "vector": embedding.tolist(),
             })
 
-        self.table.add(records)
-        self.total_rows_written += len(records)
-        logger.debug("Wrote %d records to LanceDB (total: %d).",
-                      len(records), self.total_rows_written)
+        table.add(records)
+        self.total_rows_written[table_name] += len(records)
+        logger.debug("Wrote %d records to LanceDB table %s (total: %d).",
+                      len(records), table_name, self.total_rows_written[table_name])
 
     def maybe_build_index(self, skip_index: bool = False):
-        """Build ANN index if row count > 5000 and not in smoke-test mode.
+        """Build ANN index if row count > 5000 and not in smoke-test mode."""
+        built = {}
+        for table_name, table in self.tables.items():
+            if skip_index:
+                logger.info("Index build skipped (smoke-test mode) for table %s.", table_name)
+                built[table_name] = False
+                continue
 
-        LanceDB's IVF_PQ index needs meaningful row counts per partition;
-        below ~5000 rows, flat brute-force search is fast enough and avoids
-        a common failure mode at hackathon scale.
-        """
-        if skip_index:
-            logger.info("Index build skipped (smoke-test mode).")
-            return False
+            if self.total_rows_written[table_name] <= 5000:
+                logger.info(
+                    "Skipping ANN index for %s: only %d rows (threshold: 5000). "
+                    "Flat brute-force search is fast enough at this scale.",
+                    table_name, self.total_rows_written[table_name],
+                )
+                built[table_name] = False
+                continue
 
-        if self.total_rows_written <= 5000:
-            logger.info(
-                "Skipping ANN index: only %d rows (threshold: 5000). "
-                "Flat brute-force search is fast enough at this scale.",
-                self.total_rows_written,
+            logger.info("Building ANN index on %d rows for %s...", self.total_rows_written[table_name], table_name)
+            table.create_index(
+                metric="cosine",
+                vector_column_name="vector",
             )
-            return False
+            logger.info("ANN index built successfully for %s.", table_name)
+            built[table_name] = True
+        return built
 
-        logger.info("Building ANN index on %d rows...", self.total_rows_written)
-        self.table.create_index(
-            metric="cosine",
-            vector_column_name="vector",
-        )
-        logger.info("ANN index built successfully.")
-        return True
-
-    def get_row_count(self) -> int:
-        """Return the total rows written."""
-        return self.total_rows_written
+    def get_row_count(self, table_name: str) -> int:
+        """Return the total rows written to a table."""
+        return self.total_rows_written.get(table_name, 0)

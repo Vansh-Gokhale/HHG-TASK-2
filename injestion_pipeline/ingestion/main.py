@@ -23,6 +23,11 @@ import os
 os.environ["USE_TF"] = "0"
 os.environ["USE_TORCH"] = "1"
 
+# Set HuggingFace Cache to current directory to avoid filling C drive
+local_cache = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "hf_cache"))
+os.environ["HF_DATASETS_CACHE"] = local_cache
+os.environ["HUGGINGFACE_HUB_CACHE"] = local_cache
+
 import logging
 import sys
 

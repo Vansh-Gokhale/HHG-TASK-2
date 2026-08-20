@@ -166,27 +166,18 @@ def run_pipeline(args):
     # Stage 1: Load dataset
     # -----------------------------------------------------------------------
     t0 = time.time()
-    logger.info("STAGE 1: Loading dataset (from local HuggingFace cache snapshots)")
+    logger.info("STAGE 1: Loading dataset configurations")
     logger.info("=" * 60)
 
-    # Locate cache snapshot directory
-    cache_base = os.path.expanduser("~/.cache/huggingface/hub/datasets--ai4bharat--MSMARCO-XI/snapshots")
-    if not os.path.exists(cache_base) or not os.listdir(cache_base):
-        raise FileNotFoundError(
-            f"HuggingFace dataset cache snapshot not found in {cache_base}. "
-            "Please ensure the dataset files have been downloaded first."
-        )
-
-    snapshot_dir = os.path.join(cache_base, os.listdir(cache_base)[0])
-    train_dir = os.path.join(snapshot_dir, "train")
-    if not os.path.exists(train_dir):
-        raise FileNotFoundError(f"Train directory not found at {train_dir}")
-
-    # Map available parquet files to language codes.
-    # File names are like: hintrain.parquet -> language: hin
-    parquet_files = [f for f in os.listdir(train_dir) if f.endswith(".parquet")]
-    all_languages = sorted([f.replace("train.parquet", "") for f in parquet_files])
-    logger.info("Available languages (from cached parquet files): %s", all_languages)
+    from datasets import get_dataset_config_names, load_dataset
+    try:
+        all_languages = get_dataset_config_names("ai4bharat/MSMARCO-XI")
+    except Exception as e:
+        logger.error(f"Could not fetch configs: {e}")
+        all_languages = ["hi", "ta", "te", "kn", "bn", "mr", "gu", "ml", "pa", "or", "as", "ne", "ur"]
+    
+    if all_languages == ["default"]:
+        all_languages = ["hi", "ta", "te", "kn", "bn", "mr", "gu", "ml", "pa", "or", "as", "ne", "ur"]
 
     # Filter to requested languages
     if args.languages:
@@ -195,7 +186,7 @@ def run_pipeline(args):
         ]
         missing = set(args.languages) - set(languages_to_process)
         if missing:
-            logger.warning("Requested languages not found in cached files: %s", missing)
+            logger.warning("Requested languages not found in known configs: %s", missing)
     else:
         languages_to_process = all_languages
 
@@ -214,8 +205,6 @@ def run_pipeline(args):
 
     store = LanceDBStore(output_dir=args.output_dir, fresh=args.fresh)
     store.connect()
-    store.create_table()
-
     # Load denylist
     denylist_patterns = load_denylist(args.denylist_path)
     logger.info("Loaded %d denylist patterns.", len(denylist_patterns))
@@ -223,9 +212,30 @@ def run_pipeline(args):
     # Shared dedup hash set across all languages
     seen_hashes: Set[str] = set()
 
+    # Initialize tables
+    for lang in languages_to_process:
+        store.create_table(lang)
+
     # -----------------------------------------------------------------------
-    # Process each language
+    # Process dataset (Streaming)
     # -----------------------------------------------------------------------
+    logger.info("=" * 60)
+    logger.info("Loading dataset in streaming mode...")
+    
+    try:
+        ds_stream = load_dataset("ai4bharat/MSMARCO-XI", "default", split="train", streaming=True)
+        ds_iter = iter(ds_stream)
+    except Exception as e:
+        logger.error("Failed to load dataset stream: %s", e)
+        return
+
+    rows_processed = {lang: 0 for lang in languages_to_process}
+    batch_rows_by_lang = {lang: [] for lang in languages_to_process}
+    
+    # We will use a shared progress bar for all requested languages
+    pbar_total = sum(args.limit for lang in languages_to_process) if args.limit else None
+    pbar = tqdm(total=pbar_total, desc="Rows processed")
+
     t_extract = 0.0
     t_validate = 0.0
     t_safety = 0.0
@@ -235,284 +245,229 @@ def run_pipeline(args):
     t_vecval = 0.0
     t_write = 0.0
 
-    import pyarrow.parquet as pq
+    def _process_batch(lang, batch_rows):
+        nonlocal t_extract, t_validate, t_safety, t_chunk, t_quality, t_embed, t_vecval, t_write
 
-    for lang in languages_to_process:
-        logger.info("=" * 60)
-        logger.info("Processing language: %s", lang)
-        logger.info("=" * 60)
+        # -----------------------------------------------------------
+        # Stage 2: Extract passages
+        # -----------------------------------------------------------
+        _t = time.time()
+        all_passages = []
+        for i in range(len(batch_rows)):
+            row = batch_rows[i]
+            try:
+                passages = extract_passages_from_row(row, lang)
+                all_passages.extend(passages)
+            except ValueError as e:
+                logger.error("Failed to extract passages: %s", e)
+                continue
 
-        filename = f"{lang}train.parquet"
-        filepath = os.path.join(train_dir, filename)
-        if not os.path.exists(filepath):
-            logger.error("Parquet file %s not found. Skipping.", filepath)
-            continue
+        stage_counts["total_passages_extracted"] += len(all_passages)
+        t_extract += time.time() - _t
 
-        pf = pq.ParquetFile(filepath)
-        total_rows = pf.metadata.num_rows
-        logger.info("  Parquet file has %d rows.", total_rows)
+        if not all_passages:
+            return
 
-        # Process in batches using PyArrow iter_batches to avoid conversion crashes
-        # read_batch size can be standard batch size (e.g. 500)
-        batch_size = args.batch_size
-        
-        # Keep track of rows processed for limit
-        rows_processed_for_lang = 0
+        # -----------------------------------------------------------
+        # Stage 3: Structural validation guardrail
+        # -----------------------------------------------------------
+        _t = time.time()
+        valid_passages, n_invalid, n_dup = validate_and_dedup_passages(
+            all_passages, seen_hashes
+        )
+        rejected_counts["structural_invalid"] += n_invalid
+        rejected_counts["structural_duplicate"] += n_dup
+        stage_counts["after_structural_validation"] += len(valid_passages)
+        t_validate += time.time() - _t
 
-        # We construct a tqdm progress bar manually since we are using iter_batches
-        # If a limit is set, adjust total steps accordingly
-        limit_rows = args.limit if args.limit else total_rows
-        pbar_total = (limit_rows + batch_size - 1) // batch_size
-        
-        pbar = tqdm(
-            total=pbar_total,
-            desc=f"  {lang} batches",
-            unit="batch",
+        if not valid_passages:
+            return
+
+        # -----------------------------------------------------------
+        # Stage 4: Content safety filter guardrail
+        # -----------------------------------------------------------
+        _t = time.time()
+        safe_passages, n_filtered = filter_by_denylist(
+            valid_passages, denylist_patterns
+        )
+        rejected_counts["safety_filter"] += n_filtered
+        stage_counts["after_safety_filter"] += len(safe_passages)
+        t_safety += time.time() - _t
+
+        if not safe_passages:
+            return
+
+        # -----------------------------------------------------------
+        # Stage 5: Multi-strategy chunking
+        # -----------------------------------------------------------
+        _t = time.time()
+        all_chunks = []
+        for passage in safe_passages:
+            text = passage["text"]
+            doc_id = passage["source_doc_id"]
+            is_sel = passage.get("is_selected")
+
+            fixed_chunks = chunk_fixed_size(
+                text, doc_id, lang, tokenizer,
+                chunk_tokens=args.fixed_chunk_tokens,
+                overlap_tokens=args.fixed_chunk_overlap,
+            )
+            all_chunks.extend(fixed_chunks)
+            chunk_counts_by_strategy["fixed"] += len(fixed_chunks)
+
+            semantic_chunks = chunk_semantic(
+                text, doc_id, lang, embedder,
+                similarity_threshold=args.semantic_similarity_threshold,
+            )
+            all_chunks.extend(semantic_chunks)
+            chunk_counts_by_strategy["semantic"] += len(semantic_chunks)
+
+            meta_chunks = chunk_metadata_aware(
+                text, doc_id, lang, tokenizer,
+                is_selected=is_sel,
+                chunk_tokens=args.fixed_chunk_tokens,
+                overlap_tokens=args.fixed_chunk_overlap,
+            )
+            all_chunks.extend(meta_chunks)
+            chunk_counts_by_strategy["metadata_aware"] += len(meta_chunks)
+
+        stage_counts["total_chunks_produced"] += len(all_chunks)
+        t_chunk += time.time() - _t
+
+        if not all_chunks:
+            return
+
+        # -----------------------------------------------------------
+        # Stage 6: Embed chunks
+        # -----------------------------------------------------------
+        _t = time.time()
+        chunk_texts = [c["text"] for c in all_chunks]
+        embeddings = embedder.embed_texts(chunk_texts)
+        t_embed += time.time() - _t
+
+        # -----------------------------------------------------------
+        # Stage 5 (cont): Chunk quality gate guardrail
+        # -----------------------------------------------------------
+        _t = time.time()
+        length_surviving, n_length_dropped = filter_chunks_by_length(
+            all_chunks, tokenizer,
+            min_tokens=args.min_chunk_tokens,
+            max_tokens=args.max_chunk_tokens,
         )
 
-        try:
-            for arrow_batch in pf.iter_batches(
-                batch_size=batch_size,
-                columns=["source_lang", "target_lang", "query_id", "query", "Answer", "passages"],
-                use_threads=False
-            ):
-                if args.limit and rows_processed_for_lang >= args.limit:
-                    break
+        if n_length_dropped > 0:
+            surviving_indices = []
+            length_surviving_set = set(id(c) for c in length_surviving)
+            for idx, chunk in enumerate(all_chunks):
+                if id(chunk) in length_surviving_set:
+                    surviving_indices.append(idx)
+            embeddings = embeddings[surviving_indices]
+            all_chunks = length_surviving
 
-                batch_rows = arrow_batch.to_pylist()
+        rejected_counts["chunk_too_short_or_long"] += n_length_dropped
+
+        n_near_dup = 0
+        if len(all_chunks) > 0:
+            all_chunks, embeddings, n_near_dup = deduplicate_chunks_by_embedding(
+                all_chunks, embeddings,
+                threshold=args.near_dup_threshold,
+            )
+            rejected_counts["chunk_near_duplicate"] += n_near_dup
+
+        stage_counts["after_chunk_quality_gate"] += len(all_chunks)
+        t_quality += time.time() - _t
+
+        if not all_chunks:
+            return
+
+        # -----------------------------------------------------------
+        # Stage 7: Vector validation guardrail
+        # -----------------------------------------------------------
+        _t = time.time()
+        valid_chunks, valid_embeddings, n_vec_invalid = validate_vectors(
+            all_chunks, embeddings
+        )
+
+        if n_vec_invalid > 0:
+            failed_mask = np.any(np.isnan(embeddings), axis=1) | (
+                np.linalg.norm(embeddings, axis=1) == 0.0
+            )
+            failed_indices = np.where(failed_mask)[0]
+            failed_chunks = [all_chunks[i] for i in failed_indices]
+            failed_texts = [c["text"] for c in failed_chunks]
+
+            retry_embeddings = embedder.embed_texts(failed_texts)
+            retry_valid, retry_emb, retry_invalid = validate_vectors(
+                failed_chunks, retry_embeddings
+            )
+
+            if retry_valid:
+                valid_chunks.extend(retry_valid)
+                valid_embeddings = np.vstack([valid_embeddings, retry_emb]) if len(valid_embeddings) > 0 else retry_emb
+                n_vec_invalid = retry_invalid
+
+        rejected_counts["vector_invalid"] += n_vec_invalid
+        stage_counts["after_vector_validation"] += len(valid_chunks)
+        t_vecval += time.time() - _t
+
+        if not valid_chunks:
+            return
+
+        # -----------------------------------------------------------
+        # Stage 8: Write to LanceDB
+        # -----------------------------------------------------------
+        _t = time.time()
+        store.add_batch(valid_chunks, valid_embeddings, table_name=lang)
+        stage_counts["final_rows_written"] += len(valid_chunks)
+        t_write += time.time() - _t
+
+
+    try:
+        while True:
+            # Check if all languages reached limit
+            if args.limit and all(rows_processed[lang] >= args.limit for lang in languages_to_process):
+                break
                 
-                # Apply limits on the last batch if needed
-                if args.limit and rows_processed_for_lang + len(batch_rows) > args.limit:
-                    batch_rows = batch_rows[:args.limit - rows_processed_for_lang]
-
-                rows_processed_for_lang += len(batch_rows)
-                stage_counts["total_rows_loaded"] += len(batch_rows)
-
-                # -----------------------------------------------------------
-                # Stage 2: Extract passages
-                # -----------------------------------------------------------
-                _t = time.time()
-                all_passages = []
-                for i in range(len(batch_rows)):
-                    row = batch_rows[i]
-                    try:
-                        passages = extract_passages_from_row(row, lang)
-                        all_passages.extend(passages)
-                    except ValueError as e:
-                        logger.error("Failed to extract passages: %s", e)
-                        continue
-
-                stage_counts["total_passages_extracted"] += len(all_passages)
-                t_extract += time.time() - _t
-
-                if not all_passages:
-                    pbar.update(1)
-                    continue
-
-                # -----------------------------------------------------------
-                # Stage 3: Structural validation guardrail
-                # -----------------------------------------------------------
-                _t = time.time()
-                valid_passages, n_invalid, n_dup = validate_and_dedup_passages(
-                    all_passages, seen_hashes
-                )
-                rejected_counts["structural_invalid"] += n_invalid
-                rejected_counts["structural_duplicate"] += n_dup
-                stage_counts["after_structural_validation"] += len(valid_passages)
-
-                if n_invalid or n_dup:
-                    logger.debug(
-                        "  Structural validation: %d valid, %d invalid, %d duplicates",
-                        len(valid_passages), n_invalid, n_dup,
-                    )
-                t_validate += time.time() - _t
-
-                if not valid_passages:
-                    pbar.update(1)
-                    continue
-
-                # -----------------------------------------------------------
-                # Stage 4: Content safety filter guardrail
-                # -----------------------------------------------------------
-                _t = time.time()
-                safe_passages, n_filtered = filter_by_denylist(
-                    valid_passages, denylist_patterns
-                )
-                rejected_counts["safety_filter"] += n_filtered
-                stage_counts["after_safety_filter"] += len(safe_passages)
-
-                if n_filtered:
-                    logger.debug(
-                        "  Safety filter: %d passed, %d filtered",
-                        len(safe_passages), n_filtered,
-                    )
-                t_safety += time.time() - _t
-
-                if not safe_passages:
-                    pbar.update(1)
-                    continue
-
-                # -----------------------------------------------------------
-                # Stage 5: Multi-strategy chunking
-                # -----------------------------------------------------------
-                _t = time.time()
-                all_chunks = []
-
-                for passage in safe_passages:
-                    text = passage["text"]
-                    doc_id = passage["source_doc_id"]
-                    is_sel = passage.get("is_selected")
-
-                    # Strategy A: Fixed-size
-                    fixed_chunks = chunk_fixed_size(
-                        text, doc_id, lang, tokenizer,
-                        chunk_tokens=args.fixed_chunk_tokens,
-                        overlap_tokens=args.fixed_chunk_overlap,
-                    )
-                    all_chunks.extend(fixed_chunks)
-                    chunk_counts_by_strategy["fixed"] += len(fixed_chunks)
-
-                    # Strategy B: Semantic
-                    semantic_chunks = chunk_semantic(
-                        text, doc_id, lang, embedder,
-                        similarity_threshold=args.semantic_similarity_threshold,
-                    )
-                    all_chunks.extend(semantic_chunks)
-                    chunk_counts_by_strategy["semantic"] += len(semantic_chunks)
-
-                    # Strategy C: Metadata-aware
-                    meta_chunks = chunk_metadata_aware(
-                        text, doc_id, lang, tokenizer,
-                        is_selected=is_sel,
-                        chunk_tokens=args.fixed_chunk_tokens,
-                        overlap_tokens=args.fixed_chunk_overlap,
-                    )
-                    all_chunks.extend(meta_chunks)
-                    chunk_counts_by_strategy["metadata_aware"] += len(meta_chunks)
-
-                stage_counts["total_chunks_produced"] += len(all_chunks)
-                t_chunk += time.time() - _t
-
-                if not all_chunks:
-                    pbar.update(1)
-                    continue
-
-                # -----------------------------------------------------------
-                # Stage 6: Embed chunks (needed for quality gate dedup)
-                # -----------------------------------------------------------
-                _t = time.time()
-                chunk_texts = [c["text"] for c in all_chunks]
-
-                # runtime query embedding MUST use this exact model + "query: " prefix
-                # to stay in the same vector space
-                embeddings = embedder.embed_texts(chunk_texts)
-                t_embed += time.time() - _t
-
-                # -----------------------------------------------------------
-                # Stage 5 (cont): Chunk quality gate guardrail
-                # -----------------------------------------------------------
-                _t = time.time()
-
-                # Length filter
-                length_surviving, n_length_dropped = filter_chunks_by_length(
-                    all_chunks, tokenizer,
-                    min_tokens=args.min_chunk_tokens,
-                    max_tokens=args.max_chunk_tokens,
-                )
-
-                # Need to also filter the embeddings to match
-                if n_length_dropped > 0:
-                    # Rebuild embeddings for surviving chunks
-                    surviving_indices = []
-                    length_surviving_set = set(id(c) for c in length_surviving)
-                    for idx, chunk in enumerate(all_chunks):
-                        if id(chunk) in length_surviving_set:
-                            surviving_indices.append(idx)
-                    embeddings = embeddings[surviving_indices]
-                    all_chunks = length_surviving
-
-                rejected_counts["chunk_too_short_or_long"] += n_length_dropped
-
-                # Near-duplicate removal (within same source doc)
-                n_near_dup = 0
-                if len(all_chunks) > 0:
-                    all_chunks, embeddings, n_near_dup = deduplicate_chunks_by_embedding(
-                        all_chunks, embeddings,
-                        threshold=args.near_dup_threshold,
-                    )
-                    rejected_counts["chunk_near_duplicate"] += n_near_dup
-
-                stage_counts["after_chunk_quality_gate"] += len(all_chunks)
-
-                if n_length_dropped or n_near_dup:
-                    logger.debug(
-                        "  Chunk quality gate: %d surviving, %d too short/long, %d near-duplicates",
-                        len(all_chunks), n_length_dropped, n_near_dup,
-                    )
-                t_quality += time.time() - _t
-
-                if not all_chunks:
-                    pbar.update(1)
-                    continue
-
-                # -----------------------------------------------------------
-                # Stage 7: Vector validation guardrail
-                # -----------------------------------------------------------
-                _t = time.time()
-                valid_chunks, valid_embeddings, n_vec_invalid = validate_vectors(
-                    all_chunks, embeddings
-                )
-
-                # Retry failed vectors once
-                if n_vec_invalid > 0:
-                    logger.info(
-                        "  Vector validation: %d invalid vectors, retrying failed batch...",
-                        n_vec_invalid,
-                    )
-                    # Find the failed indices
-                    failed_mask = np.any(np.isnan(embeddings), axis=1) | (
-                        np.linalg.norm(embeddings, axis=1) == 0.0
-                    )
-                    failed_indices = np.where(failed_mask)[0]
-                    failed_chunks = [all_chunks[i] for i in failed_indices]
-                    failed_texts = [c["text"] for c in failed_chunks]
-
-                    # Re-embed
-                    retry_embeddings = embedder.embed_texts(failed_texts)
-                    retry_valid, retry_emb, retry_invalid = validate_vectors(
-                        failed_chunks, retry_embeddings
-                    )
-
-                    if retry_valid:
-                        valid_chunks.extend(retry_valid)
-                        valid_embeddings = np.vstack([valid_embeddings, retry_emb]) if len(valid_embeddings) > 0 else retry_emb
-                        n_vec_invalid = retry_invalid  # Only count the final failures
-
-                    logger.info(
-                        "  After retry: %d valid, %d still invalid",
-                        len(valid_chunks), retry_invalid,
-                    )
-
-                rejected_counts["vector_invalid"] += n_vec_invalid
-                stage_counts["after_vector_validation"] += len(valid_chunks)
-                t_vecval += time.time() - _t
-
-                if not valid_chunks:
-                    pbar.update(1)
-                    continue
-
-                # -----------------------------------------------------------
-                # Stage 8: Write to LanceDB
-                # -----------------------------------------------------------
-                _t = time.time()
-                store.add_batch(valid_chunks, valid_embeddings)
-                stage_counts["final_rows_written"] += len(valid_chunks)
-                t_write += time.time() - _t
-
+            try:
+                row = next(ds_iter)
+            except StopIteration:
+                break
+                
+            # Dataset has "target_lang" indicating the specific translation
+            lang = row.get("target_lang") or row.get("source_lang")
+            
+            # Keep rows for languages we are processing
+            if lang not in languages_to_process:
+                continue
+                
+            # Check limit
+            if args.limit and rows_processed[lang] >= args.limit:
+                continue
+                
+            batch_rows_by_lang[lang].append(row)
+            rows_processed[lang] += 1
+            stage_counts["total_rows_loaded"] += 1
+            if pbar_total is not None:
                 pbar.update(1)
+            
+            if len(batch_rows_by_lang[lang]) >= args.batch_size:
+                _process_batch(lang, batch_rows_by_lang[lang])
+                batch_rows_by_lang[lang] = []
+                
+        # Flush remaining
+        for lang in languages_to_process:
+            if batch_rows_by_lang[lang]:
+                _process_batch(lang, batch_rows_by_lang[lang])
+                batch_rows_by_lang[lang] = []
 
-        finally:
-            pbar.close()
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user. Flushing current batches...")
+        for lang in languages_to_process:
+            if batch_rows_by_lang[lang]:
+                _process_batch(lang, batch_rows_by_lang[lang])
+                batch_rows_by_lang[lang] = []
+    finally:
+        pbar.close()
 
     # -----------------------------------------------------------------------
     # Timings
