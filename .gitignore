@@ -2,8 +2,7 @@
 __pycache__/
 .pytest_cache/
 *.pyc
-
-
+hf_cache/
 
 # OS files
 .DS_Store

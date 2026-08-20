@@ -19,7 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--languages",
         type=str,
         default=None,
-        help="Comma-separated list of language configs to process (e.g. 'hi,ta'). "
+        help="Comma-separated list of language configs to process (e.g. 'hi,ta' or 'hi-IN,ta-IN'). "
              "Default: all available configs.",
     )
     parser.add_argument(
@@ -117,10 +117,12 @@ def parse_args(argv=None) -> argparse.Namespace:
 
     # Smoke-test shortcut overrides
     if args.smoke_test:
-        args.limit = 20
+        args.limit = args.limit or 20
+        if not args.languages:
+            args.languages = ["hi", "ta"]
 
     # Parse languages list
-    if args.languages:
+    if args.languages and isinstance(args.languages, str):
         args.languages = [lang.strip() for lang in args.languages.split(",")]
 
     return args

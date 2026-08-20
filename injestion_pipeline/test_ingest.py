@@ -10,28 +10,41 @@ os.environ["USE_TORCH"] = "1"
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Define mock dataset
-def mock_load_dataset(*args, **kwargs):
+def mock_load_dataset(path, name=None, *args, **kwargs):
     def mock_stream():
+        # check if specific language is requested via path or name or kwargs
+        lang = None
+        if "data_files" in kwargs:
+            data_file = str(kwargs["data_files"])
+            if "hin" in data_file or "hi" in data_file:
+                lang = "hi"
+            elif "tam" in data_file or "ta" in data_file:
+                lang = "ta"
+        elif name and name != "default":
+            lang = name
+
         for i in range(15):
-            yield {
-                "target_lang": "hi",
-                "source_lang": "en",
-                "query_id": i,
-                "passages": {
-                    "Translated_passages": [f"यह एक बहुत ही सुंदर और लंबा हिंदी वाक्य है जिसका उपयोग हम परीक्षण के लिए कर रहे हैं ताकि टोकन की संख्या न्यूनतम सीमा से अधिक हो {i}।"] * 3,
-                    "is_selected": [1, 0, 0]
+            if lang is None or lang == "hi":
+                yield {
+                    "target_lang": "hi",
+                    "source_lang": "en",
+                    "query_id": i,
+                    "passages": {
+                        "Translated_passages": [f"यह एक बहुत ही सुंदर और लंबा हिंदी वाक्य है जिसका उपयोग हम परीक्षण के लिए कर रहे हैं ताकि टोकन की संख्या न्यूनतम सीमा से अधिक हो {i}।"] * 3,
+                        "is_selected": [1, 0, 0]
+                    }
                 }
-            }
         for i in range(15):
-            yield {
-                "target_lang": "ta",
-                "source_lang": "en",
-                "query_id": i + 100,
-                "passages": {
-                    "Translated_passages": [f"இது ஒரு மிக நீண்ட தமிழ் வாக்கியம் ஆகும், இது சோதனை நோக்கங்களுக்காக பயன்படுத்தப்படுகிறது, இதனால் டோக்கன் எண்ணிக்கை வரம்பை விட அதிகமாக இருக்கும் {i}."] * 3,
-                    "is_selected": [1, 0, 0]
+            if lang is None or lang == "ta":
+                yield {
+                    "target_lang": "ta",
+                    "source_lang": "en",
+                    "query_id": i + 100,
+                    "passages": {
+                        "Translated_passages": [f"இது ஒரு மிக நீண்ட தமிழ் வாக்கியம் ஆகும், இது சோதனை நோக்கங்களுக்காக பயன்படுத்தப்படுகிறது, இதனால் டோக்கன் எண்ணிக்கை வரம்பை விட அதிகமாக இருக்கும் {i}."] * 3,
+                        "is_selected": [1, 0, 0]
+                    }
                 }
-            }
     return mock_stream()
 
 if __name__ == "__main__":
@@ -56,6 +69,6 @@ if __name__ == "__main__":
 import lancedb
 db = lancedb.connect("./test_lancedb_data")
 print("Tables:", db.table_names())
-table_hi = db.open_table("hi")
+table_hi = db.open_table("hi-IN")
 print("Hindi Table head:\\n", table_hi.to_pandas().head())
     ''')

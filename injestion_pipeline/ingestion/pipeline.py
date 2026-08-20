@@ -31,6 +31,7 @@ from .guardrails import (
     validate_and_dedup_passages,
     validate_vectors,
 )
+from .schema import LANGUAGE_MAP, to_locale_table_name, normalize_lang_code
 from .store import LanceDBStore
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,7 @@ def extract_passages_from_row(
     """
     passages_raw = row.get("passages")
     query_id = row.get("query_id", 0)
+    locale_lang = to_locale_table_name(language)
 
     if passages_raw is None:
         raise ValueError(
@@ -95,7 +97,7 @@ def extract_passages_from_row(
             extracted.append({
                 "text": str(text) if text else "",
                 "source_doc_id": f"{language}_{query_id}_{idx}",
-                "language": language,
+                "language": locale_lang,
                 "is_selected": is_sel,
             })
 
@@ -121,7 +123,7 @@ def extract_passages_from_row(
             extracted.append({
                 "text": str(text) if text else "",
                 "source_doc_id": f"{language}_{query_id}_{idx}",
-                "language": language,
+                "language": locale_lang,
                 "is_selected": is_sel,
             })
     else:
@@ -174,23 +176,25 @@ def run_pipeline(args):
         all_languages = get_dataset_config_names("ai4bharat/MSMARCO-XI")
     except Exception as e:
         logger.error(f"Could not fetch configs: {e}")
-        all_languages = ["hi", "ta", "te", "kn", "bn", "mr", "gu", "ml", "pa", "or", "as", "ne", "ur"]
+        all_languages = list(LANGUAGE_MAP.keys())
     
     if all_languages == ["default"]:
-        all_languages = ["hi", "ta", "te", "kn", "bn", "mr", "gu", "ml", "pa", "or", "as", "ne", "ur"]
+        all_languages = list(LANGUAGE_MAP.keys())
 
-    # Filter to requested languages
+    # Filter to requested languages (accepting both 'ta' and 'ta-IN')
     if args.languages:
+        normalized_requested = [normalize_lang_code(l) for l in args.languages]
         languages_to_process = [
-            lang for lang in args.languages if lang in all_languages
+            lang for lang in normalized_requested if lang in all_languages or lang in LANGUAGE_MAP
         ]
-        missing = set(args.languages) - set(languages_to_process)
+        missing = set(normalized_requested) - set(languages_to_process)
         if missing:
             logger.warning("Requested languages not found in known configs: %s", missing)
     else:
-        languages_to_process = all_languages
+        languages_to_process = [l for l in all_languages if l in LANGUAGE_MAP] or list(LANGUAGE_MAP.keys())
 
-    logger.info("Languages to process: %s", languages_to_process)
+    logger.info("Languages to process: %s (table names: %s)",
+                languages_to_process, [to_locale_table_name(l) for l in languages_to_process])
     timings["load"] = time.time() - t0
 
     # -----------------------------------------------------------------------
@@ -212,9 +216,10 @@ def run_pipeline(args):
     # Shared dedup hash set across all languages
     seen_hashes: Set[str] = set()
 
-    # Initialize tables
+    # Initialize tables with standard locale format (e.g. 'ta-IN')
     for lang in languages_to_process:
-        store.create_table(lang)
+        locale_name = to_locale_table_name(lang)
+        store.create_table(locale_name)
 
     # -----------------------------------------------------------------------
     # Process dataset (Streaming)
@@ -222,12 +227,52 @@ def run_pipeline(args):
     logger.info("=" * 60)
     logger.info("Loading dataset in streaming mode...")
     
-    try:
-        ds_stream = load_dataset("ai4bharat/MSMARCO-XI", "default", split="train", streaming=True)
-        ds_iter = iter(ds_stream)
-    except Exception as e:
-        logger.error("Failed to load dataset stream: %s", e)
-        return
+    # 3-letter prefix mapping for ai4bharat/MSMARCO-XI train files
+    PARQUET_FILE_MAP = {
+        "as": "train/asmtrain.parquet",
+        "bn": "train/bentrain.parquet",
+        "gu": "train/gujtrain.parquet",
+        "hi": "train/hintrain.parquet",
+        "kn": "train/kantrain.parquet",
+        "ml": "train/maltrain.parquet",
+        "mr": "train/martrain.parquet",
+        "ne": "train/neptrain.parquet",
+        "or": "train/oritrain.parquet",
+        "pa": "train/pantrain.parquet",
+        "sa": "train/santrain.parquet",
+        "ta": "train/tamtrain.parquet",
+        "ur": "train/urdtrain.parquet",
+    }
+
+    # Helper to stream rows for each language
+    def _stream_language_rows(lang_code):
+        parquet_rel = PARQUET_FILE_MAP.get(lang_code)
+        if parquet_rel:
+            try:
+                ds = load_dataset(
+                    "parquet",
+                    data_files={"train": f"https://huggingface.co/datasets/ai4bharat/MSMARCO-XI/resolve/main/{parquet_rel}"},
+                    split="train",
+                    streaming=True,
+                )
+                yielded = 0
+                for r in ds:
+                    r["target_lang"] = lang_code
+                    yield r
+                    yielded += 1
+                if yielded > 0:
+                    return
+            except Exception as ex:
+                logger.debug("Direct parquet stream for %s failed (%s), falling back to default stream", lang_code, ex)
+        # Fallback to default split
+        try:
+            ds_stream = load_dataset("ai4bharat/MSMARCO-XI", "default", split="train", streaming=True)
+            for r in ds_stream:
+                row_lang = r.get("target_lang") or r.get("source_lang")
+                if row_lang == lang_code:
+                    yield r
+        except Exception as ex:
+            logger.error("Failed to load stream for %s: %s", lang_code, ex)
 
     rows_processed = {lang: 0 for lang in languages_to_process}
     batch_rows_by_lang = {lang: [] for lang in languages_to_process}
@@ -302,13 +347,14 @@ def run_pipeline(args):
         # -----------------------------------------------------------
         _t = time.time()
         all_chunks = []
+        locale_lang = to_locale_table_name(lang)
         for passage in safe_passages:
             text = passage["text"]
             doc_id = passage["source_doc_id"]
             is_sel = passage.get("is_selected")
 
             fixed_chunks = chunk_fixed_size(
-                text, doc_id, lang, tokenizer,
+                text, doc_id, locale_lang, tokenizer,
                 chunk_tokens=args.fixed_chunk_tokens,
                 overlap_tokens=args.fixed_chunk_overlap,
             )
@@ -316,14 +362,14 @@ def run_pipeline(args):
             chunk_counts_by_strategy["fixed"] += len(fixed_chunks)
 
             semantic_chunks = chunk_semantic(
-                text, doc_id, lang, embedder,
+                text, doc_id, locale_lang, embedder,
                 similarity_threshold=args.semantic_similarity_threshold,
             )
             all_chunks.extend(semantic_chunks)
             chunk_counts_by_strategy["semantic"] += len(semantic_chunks)
 
             meta_chunks = chunk_metadata_aware(
-                text, doc_id, lang, tokenizer,
+                text, doc_id, locale_lang, tokenizer,
                 is_selected=is_sel,
                 chunk_tokens=args.fixed_chunk_tokens,
                 overlap_tokens=args.fixed_chunk_overlap,
@@ -417,45 +463,29 @@ def run_pipeline(args):
         # Stage 8: Write to LanceDB
         # -----------------------------------------------------------
         _t = time.time()
-        store.add_batch(valid_chunks, valid_embeddings, table_name=lang)
+        locale_table = to_locale_table_name(lang)
+        store.add_batch(valid_chunks, valid_embeddings, table_name=locale_table)
         stage_counts["final_rows_written"] += len(valid_chunks)
         t_write += time.time() - _t
 
 
     try:
-        while True:
-            # Check if all languages reached limit
-            if args.limit and all(rows_processed[lang] >= args.limit for lang in languages_to_process):
-                break
-                
-            try:
-                row = next(ds_iter)
-            except StopIteration:
-                break
-                
-            # Dataset has "target_lang" indicating the specific translation
-            lang = row.get("target_lang") or row.get("source_lang")
-            
-            # Keep rows for languages we are processing
-            if lang not in languages_to_process:
-                continue
-                
-            # Check limit
-            if args.limit and rows_processed[lang] >= args.limit:
-                continue
-                
-            batch_rows_by_lang[lang].append(row)
-            rows_processed[lang] += 1
-            stage_counts["total_rows_loaded"] += 1
-            if pbar_total is not None:
-                pbar.update(1)
-            
-            if len(batch_rows_by_lang[lang]) >= args.batch_size:
-                _process_batch(lang, batch_rows_by_lang[lang])
-                batch_rows_by_lang[lang] = []
-                
-        # Flush remaining
         for lang in languages_to_process:
+            for row in _stream_language_rows(lang):
+                if args.limit and rows_processed[lang] >= args.limit:
+                    break
+
+                batch_rows_by_lang[lang].append(row)
+                rows_processed[lang] += 1
+                stage_counts["total_rows_loaded"] += 1
+                if pbar is not None:
+                    pbar.update(1)
+
+                if len(batch_rows_by_lang[lang]) >= args.batch_size:
+                    _process_batch(lang, batch_rows_by_lang[lang])
+                    batch_rows_by_lang[lang] = []
+
+            # Flush remaining for this language
             if batch_rows_by_lang[lang]:
                 _process_batch(lang, batch_rows_by_lang[lang])
                 batch_rows_by_lang[lang] = []
@@ -492,7 +522,8 @@ def run_pipeline(args):
     # -----------------------------------------------------------------------
     # Write reports
     # -----------------------------------------------------------------------
-    _write_reports(args, languages_to_process, stage_counts, chunk_counts_by_strategy,
+    locales_processed = [to_locale_table_name(l) for l in languages_to_process]
+    _write_reports(args, locales_processed, stage_counts, chunk_counts_by_strategy,
                    rejected_counts, index_built, timings)
 
     # -----------------------------------------------------------------------
@@ -501,7 +532,7 @@ def run_pipeline(args):
     logger.info("=" * 60)
     logger.info("PIPELINE COMPLETE")
     logger.info("=" * 60)
-    logger.info("Languages processed: %s", languages_to_process)
+    logger.info("Languages processed: %s (tables: %s)", languages_to_process, locales_processed)
     logger.info("Total rows loaded: %d", stage_counts["total_rows_loaded"])
     logger.info("Total passages extracted: %d", stage_counts["total_passages_extracted"])
     logger.info("Final rows written to LanceDB: %d", stage_counts["final_rows_written"])
