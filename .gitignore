@@ -3,13 +3,7 @@ __pycache__/
 .pytest_cache/
 *.pyc
 
-# Ignore DBs and outputs
-*passages.lance*
-test_debug_db/
-test_lancedb_data/
-test_lancedb_data_direct/
-test_lancedb_output/
-test_simple_db/
+
 
 # OS files
 .DS_Store
