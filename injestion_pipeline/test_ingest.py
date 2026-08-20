@@ -18,7 +18,7 @@ def mock_load_dataset(*args, **kwargs):
                 "source_lang": "en",
                 "query_id": i,
                 "passages": {
-                    "Translated_passages": [f"यह एक उदाहरण हिंदी वाक्य है {i}।"] * 3,
+                    "Translated_passages": [f"यह एक बहुत ही सुंदर और लंबा हिंदी वाक्य है जिसका उपयोग हम परीक्षण के लिए कर रहे हैं ताकि टोकन की संख्या न्यूनतम सीमा से अधिक हो {i}।"] * 3,
                     "is_selected": [1, 0, 0]
                 }
             }
@@ -28,7 +28,7 @@ def mock_load_dataset(*args, **kwargs):
                 "source_lang": "en",
                 "query_id": i + 100,
                 "passages": {
-                    "Translated_passages": [f"இது ஒரு உதாரணம் தமிழ் வாக்கியம் {i}."] * 3,
+                    "Translated_passages": [f"இது ஒரு மிக நீண்ட தமிழ் வாக்கியம் ஆகும், இது சோதனை நோக்கங்களுக்காக பயன்படுத்தப்படுகிறது, இதனால் டோக்கன் எண்ணிக்கை வரம்பை விட அதிகமாக இருக்கும் {i}."] * 3,
                     "is_selected": [1, 0, 0]
                 }
             }
