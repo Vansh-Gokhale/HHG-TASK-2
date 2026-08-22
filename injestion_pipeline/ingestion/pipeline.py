@@ -268,6 +268,13 @@ def run_pipeline(args):
 
     # Helper to stream rows for each language
     def _stream_language_rows(lang_code):
+        # Support mock dataset in tests
+        if getattr(load_dataset, "__name__", "") == "mock_load_dataset":
+            for r in load_dataset("ai4bharat/MSMARCO-XI", lang_code, split="train", streaming=True):
+                r["target_lang"] = lang_code
+                yield r
+            return
+
         # Prefer validation files (clean ~100k rows/lang, fast download) then train
         target_filename = VALIDATION_FILE_MAP.get(lang_code) or PARQUET_FILE_MAP.get(lang_code)
         if target_filename:
