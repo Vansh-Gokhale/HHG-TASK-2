@@ -19,7 +19,7 @@ import pytest
 
 
 # Use a temporary output directory for tests
-TEST_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "test_lancedb_output")
+TEST_OUTPUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "test_lancedb_output")).replace("\\", "/")
 
 
 @pytest.fixture(scope="module")

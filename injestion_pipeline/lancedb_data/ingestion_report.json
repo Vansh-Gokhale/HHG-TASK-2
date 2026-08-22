@@ -1,0 +1,73 @@
+{
+  "embedding_model": "intfloat/multilingual-e5-small",
+  "embedding_backend": "onnx",
+  "embedding_dim": 384,
+  "passage_prefix": "passage: ",
+  "query_prefix_note": "runtime MUST prefix queries with 'query: ' to match this index",
+  "languages_processed": [
+    "hi-IN",
+    "ta-IN",
+    "bn-IN",
+    "te-IN",
+    "mr-IN",
+    "gu-IN",
+    "kn-IN",
+    "ml-IN",
+    "pa-IN",
+    "ur-IN",
+    "as-IN",
+    "or-IN",
+    "sa-IN"
+  ],
+  "stage_counts": {
+    "total_rows_loaded": 325,
+    "total_passages_extracted": 3250,
+    "after_structural_validation": 3250,
+    "after_safety_filter": 3250,
+    "total_chunks_produced": 10060,
+    "after_chunk_quality_gate": 3320,
+    "after_vector_validation": 3320,
+    "final_rows_written": 3320
+  },
+  "chunk_counts_by_strategy": {
+    "fixed": 3396,
+    "semantic": 3268,
+    "metadata_aware": 3396
+  },
+  "rejected_counts_by_guardrail": {
+    "structural_invalid": 0,
+    "structural_duplicate": 0,
+    "safety_filter": 0,
+    "chunk_too_short_or_long": 41,
+    "chunk_near_duplicate": 6699,
+    "vector_invalid": 0
+  },
+  "index_built": {
+    "hi-IN": false,
+    "ta-IN": false,
+    "bn-IN": false,
+    "te-IN": false,
+    "mr-IN": false,
+    "gu-IN": false,
+    "kn-IN": false,
+    "ml-IN": false,
+    "pa-IN": false,
+    "ur-IN": false,
+    "as-IN": false,
+    "or-IN": false,
+    "sa-IN": false
+  },
+  "wall_clock_seconds_by_stage": {
+    "load": 3.813,
+    "model_load": 24.496,
+    "extract_passages": 0.003,
+    "structural_validation": 0.091,
+    "safety_filter": 0.0,
+    "chunking": 274.929,
+    "embedding": 1040.667,
+    "chunk_quality_gate": 5.22,
+    "vector_validation": 0.0,
+    "write_lancedb": 0.885,
+    "index_build": 0.002
+  }
+}

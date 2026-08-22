@@ -227,7 +227,12 @@ def run_pipeline(args):
     logger.info("=" * 60)
     logger.info("Loading dataset in streaming mode...")
     
-    # 3-letter prefix mapping for ai4bharat/MSMARCO-XI train files
+    # 3-letter prefix mapping for ai4bharat/MSMARCO-XI train & validation files
+    from huggingface_hub import hf_hub_download
+    import pyarrow.parquet as pq
+
+    local_cache = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "hf_cache"))
+
     PARQUET_FILE_MAP = {
         "as": "train/asmtrain.parquet",
         "bn": "train/bentrain.parquet",
@@ -241,30 +246,64 @@ def run_pipeline(args):
         "pa": "train/pantrain.parquet",
         "sa": "train/santrain.parquet",
         "ta": "train/tamtrain.parquet",
+        "te": "validation/telval.parquet",
         "ur": "train/urdtrain.parquet",
+    }
+    VALIDATION_FILE_MAP = {
+        "as": "validation/asmval.parquet",
+        "bn": "validation/benval.parquet",
+        "gu": "validation/gujval.parquet",
+        "hi": "validation/hinval.parquet",
+        "kn": "validation/kanval.parquet",
+        "ml": "validation/malval.parquet",
+        "mr": "validation/marval.parquet",
+        "ne": "validation/nepval.parquet",
+        "or": "validation/orival.parquet",
+        "pa": "validation/panval.parquet",
+        "sa": "validation/sanval.parquet",
+        "ta": "validation/tamval.parquet",
+        "te": "validation/telval.parquet",
+        "ur": "validation/urdval.parquet",
     }
 
     # Helper to stream rows for each language
     def _stream_language_rows(lang_code):
-        parquet_rel = PARQUET_FILE_MAP.get(lang_code)
-        if parquet_rel:
+        # Prefer validation files (clean ~100k rows/lang, fast download) then train
+        target_filename = VALIDATION_FILE_MAP.get(lang_code) or PARQUET_FILE_MAP.get(lang_code)
+        if target_filename:
             try:
+                local_path = hf_hub_download(
+                    repo_id="ai4bharat/MSMARCO-XI",
+                    filename=target_filename,
+                    repo_type="dataset",
+                    cache_dir=local_cache,
+                )
+                pf = pq.ParquetFile(local_path)
+                for batch in pf.iter_batches(batch_size=args.batch_size):
+                    for r in batch.to_pylist():
+                        r["target_lang"] = lang_code
+                        yield r
+                return
+            except Exception as ex:
+                logger.debug("Local parquet stream for %s failed (%s), falling back to streaming", lang_code, ex)
+
+        # Fallback to streaming mode via datasets
+        try:
+            parquet_rel = PARQUET_FILE_MAP.get(lang_code) or VALIDATION_FILE_MAP.get(lang_code)
+            if parquet_rel:
                 ds = load_dataset(
                     "parquet",
                     data_files={"train": f"https://huggingface.co/datasets/ai4bharat/MSMARCO-XI/resolve/main/{parquet_rel}"},
                     split="train",
                     streaming=True,
                 )
-                yielded = 0
                 for r in ds:
                     r["target_lang"] = lang_code
                     yield r
-                    yielded += 1
-                if yielded > 0:
-                    return
-            except Exception as ex:
-                logger.debug("Direct parquet stream for %s failed (%s), falling back to default stream", lang_code, ex)
-        # Fallback to default split
+                return
+        except Exception as ex:
+            logger.debug("Direct parquet stream for %s failed (%s), trying default stream", lang_code, ex)
+
         try:
             ds_stream = load_dataset("ai4bharat/MSMARCO-XI", "default", split="train", streaming=True)
             for r in ds_stream:
